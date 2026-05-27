@@ -1,0 +1,48 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "Admin Riwi",
+      "email": "admin@riwi.io",
+      "password": "admin123",
+      "role": "admin"
+    },
+    {
+      "id": 2,
+      "name": "Carlos Coder",
+      "email": "coder@riwi.io",
+      "password": "coder123",
+      "role": "coder"
+    }
+  ],
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Design System Setup",
+      "description": "Configure the global design tokens, colors, and typography for the product.",
+      "status": "todo",
+      "userId": 2
+    },
+    {
+      "id": 2,
+      "title": "API Integration",
+      "description": "Connect the frontend to the JSON Server REST API endpoints.",
+      "status": "in progress",
+      "userId": 2
+    },
+    {
+      "id": 3,
+      "title": "Kanban Board UI",
+      "description": "Build the drag-and-drop Kanban board with column-based task organization.",
+      "status": "in review",
+      "userId": 2
+    },
+    {
+      "id": 4,
+      "title": "Authentication Flow",
+      "description": "Implement login validation, session storage, and route protection by role.",
+      "status": "done",
+      "userId": 2
+    }
+  ]
+}
