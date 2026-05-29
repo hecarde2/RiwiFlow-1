@@ -1,230 +1,486 @@
 /**
  * kanbanView.js
- * Renders the Kanban board inside the main content area.
- * Supports full drag & drop between columns.
- * Admin: can create, edit, delete any task.
- * Coder: can edit only their own tasks (status + description).
+ * Renderiza el tablero Kanban dentro del área principal.
+ * Soporta arrastrar y soltar entre columnas.
+ *
+ * Admin:
+ * - Puede crear, editar y eliminar cualquier tarea.
+ *
+ * Coder:
+ * - Solo puede editar sus propias tareas
+ *   (estado y descripción).
  */
 
-import { getTasks, getUsers, createTask, updateTask, deleteTask } from '../../services/api.js';
-import { getSession, isAdmin } from '../../services/session.js';
+import {
+  getTasks,
+  getUsers,
+  createTask,
+  updateTask,
+  deleteTask
+} from '../../services/api.js';
+
+import {
+  getSession,
+  isAdmin
+} from '../../services/session.js';
+
 import { renderTaskCard } from '../../components/taskCard.js';
 import { initDragDrop } from '../../components/dragDrop.js';
 import { openModal, closeModal } from '../../components/modal.js';
 
+/** Configuración de columnas del tablero */
 const COLUMNS = [
-  { status: 'todo',        label: 'Todo',        color: 'bg-surface-container-high' },
-  { status: 'in progress', label: 'In Progress',  color: 'bg-primary-fixed/50' },
-  { status: 'in review',   label: 'In Review',    color: 'bg-secondary-container/40' },
-  { status: 'done',        label: 'Done',         color: 'bg-tertiary-fixed/30' },
+  {
+    status: 'todo',
+    label: 'Todo',
+    color: 'bg-surface-container-high'
+  },
+  {
+    status: 'in progress',
+    label: 'In Progress',
+    color: 'bg-primary-fixed/50'
+  },
+  {
+    status: 'in review',
+    label: 'In Review',
+    color: 'bg-secondary-container/40'
+  },
+  {
+    status: 'done',
+    label: 'Done',
+    color: 'bg-tertiary-fixed/30'
+  },
 ];
 
-/** Renders the static column structure (cards inserted later) */
+/**
+ * Renderiza la estructura estática de las columnas.
+ * Las tarjetas se insertan posteriormente.
+ */
 function renderColumns() {
+
   return COLUMNS.map(col => `
-    <div class="kanban-column flex flex-col h-full" data-col="${col.status}">
+    <div class="kanban-column flex flex-col h-full"
+         data-col="${col.status}">
+
+      <!-- Encabezado de columna -->
       <div class="flex items-center justify-between mb-md px-1">
+
         <div class="flex items-center gap-2">
-          <h3 class="font-title-sm text-title-sm text-on-surface">${col.label}</h3>
+
+          <!-- Título -->
+          <h3 class="font-title-sm text-title-sm text-on-surface">
+            ${col.label}
+          </h3>
+
+          <!-- Contador -->
           <span class="bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded-full
-                       font-label-sm text-label-sm col-count" data-col-count="${col.status}">0</span>
+                       font-label-sm text-label-sm col-count"
+                data-col-count="${col.status}">
+            0
+          </span>
         </div>
+
+        <!-- Botón agregar tarea solo para admin -->
         ${isAdmin() && col.status === 'todo' ? `
           <button class="btn-add-task material-symbols-outlined text-outline hover:text-primary transition-colors"
-                  title="Add task">add_circle</button>` : `
-          <button class="material-symbols-outlined text-outline" data-icon="more_horiz">more_horiz</button>`}
+                  title="Add task">
+            add_circle
+          </button>` : `
+
+          <!-- Botón decorativo -->
+          <button class="material-symbols-outlined text-outline"
+                  data-icon="more_horiz">
+            more_horiz
+          </button>`}
       </div>
+
+      <!-- Zona donde se insertan las tarjetas -->
       <div class="column-drop-zone flex-1 space-y-md p-2 rounded-xl overflow-y-auto custom-scrollbar
                   transition-all duration-200"
            data-status="${col.status}">
-        <!-- Cards injected here -->
+
+        <!-- Las tarjetas se insertan aquí -->
       </div>
     </div>`).join('');
 }
 
-/** Full board HTML shell */
+/**
+ * Renderiza la estructura completa del tablero
+ */
 export function renderKanbanView() {
+
   return `
     <div class="flex flex-col h-full">
-      <!-- Board header -->
+
+      <!-- Encabezado principal -->
       <div class="flex items-center justify-between mb-lg px-1 shrink-0">
+
         <div>
-          <h2 class="font-headline-md text-headline-md text-on-surface">Kanban Board</h2>
+          <h2 class="font-headline-md text-headline-md text-on-surface">
+            Kanban Board
+          </h2>
+
           <p class="font-body-sm text-body-sm text-on-surface-variant">
             Drag cards between columns to update their status
           </p>
         </div>
+
+        <!-- Botón crear tarea -->
         ${isAdmin() ? `
           <button id="btn-create-task"
                   class="flex items-center gap-sm px-lg py-sm bg-primary text-on-primary rounded-lg
-                         font-label-md text-label-md hover:brightness-110 active:scale-[0.98] transition-all">
-            <span class="material-symbols-outlined text-[18px]">add</span>
+                         font-label-md text-label-md hover:brightness-110
+                         active:scale-[0.98] transition-all">
+
+            <span class="material-symbols-outlined text-[18px]">
+              add
+            </span>
+
             New Task
           </button>` : ''}
       </div>
 
-      <!-- Columns -->
-      <div class="flex gap-lg overflow-x-auto pb-md flex-1" id="kanban-board">
+      <!-- Contenedor de columnas -->
+      <div class="flex gap-lg overflow-x-auto pb-md flex-1"
+           id="kanban-board">
+
         ${renderColumns()}
       </div>
     </div>`;
 }
 
-/** Populates card HTML in each column drop zone */
+/**
+ * Inserta las tarjetas dentro de cada columna
+ */
 async function populateBoard() {
-  const [tasks, users] = await Promise.all([getTasks(), getUsers()]);
+
+  // Obtiene tareas y usuarios en paralelo
+  const [tasks, users] = await Promise.all([
+    getTasks(),
+    getUsers()
+  ]);
+
+  // Usuario actual
   const user = getSession();
-  const usersMap = Object.fromEntries(users.map(u => [u.id, u.name]));
 
+  // Mapa rápido de usuarios
+  const usersMap =
+    Object.fromEntries(users.map(u => [u.id, u.name]));
+
+  // Recorre cada columna
   COLUMNS.forEach(col => {
-    const zone = document.querySelector(`.column-drop-zone[data-status="${col.status}"]`);
-    const colTasks = tasks.filter(t => t.status === col.status);
-    zone.innerHTML = colTasks.map(task => renderTaskCard(task, user, usersMap)).join('');
 
-    // Update count badge
-    const badge = document.querySelector(`.col-count[data-col-count="${col.status}"]`);
+    // Zona de la columna
+    const zone = document.querySelector(
+      `.column-drop-zone[data-status="${col.status}"]`
+    );
+
+    // Filtra tareas por estado
+    const colTasks =
+      tasks.filter(t => t.status === col.status);
+
+    // Inserta tarjetas
+    zone.innerHTML =
+      colTasks.map(task =>
+        renderTaskCard(task, user, usersMap)
+      ).join('');
+
+    // Actualiza contador
+    const badge = document.querySelector(
+      `.col-count[data-col-count="${col.status}"]`
+    );
+
     if (badge) badge.textContent = colTasks.length;
   });
 
-  // Re-init drag & drop after DOM update
+  // Reinicializa drag & drop después de actualizar el DOM
   initDragDrop(async (taskId, newStatus) => {
-    await updateTask(taskId, { status: newStatus });
+
+    await updateTask(taskId, {
+      status: newStatus
+    });
+
     await populateBoard();
+
     bindCardActions();
   });
 
+  // Vuelve a enlazar acciones de tarjetas
   bindCardActions();
 }
 
-/** Opens the task create/edit modal */
-function openTaskModal(task = null, users = [], prefillStatus = 'todo') {
+/**
+ * Abre el modal para crear o editar tareas
+ */
+function openTaskModal(
+  task = null,
+  users = [],
+  prefillStatus = 'todo'
+) {
+
   const admin = isAdmin();
+
+  // Verifica si es edición
   const isEdit = !!task;
 
+  // Opciones de usuarios
   const userOptions = users
+
     .filter(u => u.role === 'coder')
-    .map(u => `<option value="${u.id}" ${task?.userId == u.id ? 'selected' : ''}>${u.name}</option>`)
+
+    .map(u => `
+      <option value="${u.id}"
+        ${task?.userId == u.id ? 'selected' : ''}>
+        ${u.name}
+      </option>`)
+
     .join('');
 
-  const statusOptions = COLUMNS.map(col =>
-    `<option value="${col.status}" ${(task?.status || prefillStatus) === col.status ? 'selected' : ''}>${col.label}</option>`
-  ).join('');
+  // Opciones de estados
+  const statusOptions = COLUMNS.map(col => `
+    <option value="${col.status}"
+      ${(task?.status || prefillStatus) === col.status
+        ? 'selected'
+        : ''}>
 
+      ${col.label}
+    </option>`).join('');
+
+  // HTML del cuerpo del modal
   const bodyHTML = `
     <div class="space-y-md">
+
+      <!-- Campo título -->
       <div class="space-y-xs">
-        <label class="font-label-md text-label-md text-on-surface-variant block">Title</label>
-        <input id="modal-task-title" type="text"
-               class="w-full h-10 px-md rounded-lg border border-outline focus:border-primary
-                      focus:ring-1 focus:ring-primary outline-none text-body-sm transition-all"
-               placeholder="Task title" value="${task?.title || ''}"
-               ${!admin ? 'disabled' : ''} required />
+
+        <label class="font-label-md text-label-md text-on-surface-variant block">
+          Title
+        </label>
+
+        <input id="modal-task-title"
+               type="text"
+               class="w-full h-10 px-md rounded-lg border border-outline
+                      focus:border-primary focus:ring-1 focus:ring-primary
+                      outline-none text-body-sm transition-all"
+               placeholder="Task title"
+               value="${task?.title || ''}"
+               ${!admin ? 'disabled' : ''}
+               required />
       </div>
+
+      <!-- Campo descripción -->
       <div class="space-y-xs">
-        <label class="font-label-md text-label-md text-on-surface-variant block">Description</label>
-        <textarea id="modal-task-desc" rows="3"
-                  class="w-full px-md py-sm rounded-lg border border-outline focus:border-primary
-                         focus:ring-1 focus:ring-primary outline-none text-body-sm transition-all resize-none"
+
+        <label class="font-label-md text-label-md text-on-surface-variant block">
+          Description
+        </label>
+
+        <textarea id="modal-task-desc"
+                  rows="3"
+                  class="w-full px-md py-sm rounded-lg border border-outline
+                         focus:border-primary focus:ring-1 focus:ring-primary
+                         outline-none text-body-sm transition-all resize-none"
                   placeholder="What needs to be done?">${task?.description || ''}</textarea>
       </div>
+
+      <!-- Campo estado -->
       <div class="space-y-xs">
-        <label class="font-label-md text-label-md text-on-surface-variant block">Status</label>
+
+        <label class="font-label-md text-label-md text-on-surface-variant block">
+          Status
+        </label>
+
         <select id="modal-task-status"
-                class="w-full h-10 px-md rounded-lg border border-outline focus:border-primary
-                       focus:ring-1 focus:ring-primary outline-none text-body-sm transition-all">
+                class="w-full h-10 px-md rounded-lg border border-outline
+                       focus:border-primary focus:ring-1 focus:ring-primary
+                       outline-none text-body-sm transition-all">
+
           ${statusOptions}
         </select>
       </div>
+
+      <!-- Campo asignación solo admin -->
       ${admin ? `
         <div class="space-y-xs">
-          <label class="font-label-md text-label-md text-on-surface-variant block">Assign to</label>
+
+          <label class="font-label-md text-label-md text-on-surface-variant block">
+            Assign to
+          </label>
+
           <select id="modal-task-user"
-                  class="w-full h-10 px-md rounded-lg border border-outline focus:border-primary
-                         focus:ring-1 focus:ring-primary outline-none text-body-sm transition-all">
+                  class="w-full h-10 px-md rounded-lg border border-outline
+                         focus:border-primary focus:ring-1 focus:ring-primary
+                         outline-none text-body-sm transition-all">
+
             ${userOptions}
           </select>
         </div>` : ''}
     </div>`;
 
+  // Abre modal
   openModal({
-    title: isEdit ? 'Edit Task' : 'Create Task',
-    bodyHTML,
-    confirmLabel: isEdit ? 'Update' : 'Create',
-    onConfirm: async () => {
-      const title = document.getElementById('modal-task-title')?.value.trim();
-      const description = document.getElementById('modal-task-desc').value.trim();
-      const status = document.getElementById('modal-task-status').value;
-      const userIdEl = document.getElementById('modal-task-user');
-      const userId = userIdEl ? parseInt(userIdEl.value) : task?.userId;
 
+    title: isEdit ? 'Edit Task' : 'Create Task',
+
+    bodyHTML,
+
+    confirmLabel: isEdit ? 'Update' : 'Create',
+
+    onConfirm: async () => {
+
+      // Obtiene valores del formulario
+      const title =
+        document.getElementById('modal-task-title')
+          ?.value.trim();
+
+      const description =
+        document.getElementById('modal-task-desc')
+          .value.trim();
+
+      const status =
+        document.getElementById('modal-task-status')
+          .value;
+
+      const userIdEl =
+        document.getElementById('modal-task-user');
+
+      const userId = userIdEl
+        ? parseInt(userIdEl.value)
+        : task?.userId;
+
+      // Validación mínima
       if (!description) return;
 
+      // Editar tarea
       if (isEdit) {
+
         const payload = admin
           ? { title, description, status, userId }
           : { description, status };
-        await updateTask(task.id, { ...task, ...payload });
+
+        await updateTask(task.id, {
+          ...task,
+          ...payload
+        });
+
       } else {
-        await createTask({ title, description, status: status || 'todo', userId });
+
+        // Crear tarea
+        await createTask({
+          title,
+          description,
+          status: status || 'todo',
+          userId
+        });
       }
 
+      // Cierra modal y recarga tablero
       closeModal();
+
       await populateBoard();
+
       bindCardActions();
     },
   });
 }
 
-/** Binds edit/delete buttons on all cards */
+/**
+ * Asocia eventos a botones de editar y eliminar
+ */
 function bindCardActions() {
-  document.querySelectorAll('.btn-edit-task').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const taskId = btn.dataset.taskId;
-      const [task, users] = await Promise.all([
-        import('../../services/api.js').then(m => m.getTaskById(taskId)),
-        getUsers(),
-      ]);
-      openTaskModal(task, users);
-    });
-  });
 
-  document.querySelectorAll('.btn-delete-task').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const taskId = btn.dataset.taskId;
-      openModal({
-        title: 'Delete Task',
-        bodyHTML: '<p class="font-body-md text-body-md text-on-surface-variant">Are you sure you want to delete this task? This action cannot be undone.</p>',
-        confirmLabel: 'Delete',
-        confirmClass: '!bg-error',
-        onConfirm: async () => {
-          await deleteTask(taskId);
-          closeModal();
-          await populateBoard();
-          bindCardActions();
-        },
+  // Botones editar
+  document.querySelectorAll('.btn-edit-task')
+    .forEach(btn => {
+
+      btn.addEventListener('click', async () => {
+
+        const taskId = btn.dataset.taskId;
+
+        // Obtiene tarea y usuarios
+        const [task, users] = await Promise.all([
+
+          import('../../services/api.js')
+            .then(m => m.getTaskById(taskId)),
+
+          getUsers(),
+        ]);
+
+        // Abre modal de edición
+        openTaskModal(task, users);
       });
     });
-  });
+
+  // Botones eliminar
+  document.querySelectorAll('.btn-delete-task')
+    .forEach(btn => {
+
+      btn.addEventListener('click', async () => {
+
+        const taskId = btn.dataset.taskId;
+
+        // Modal de confirmación
+        openModal({
+
+          title: 'Delete Task',
+
+          bodyHTML: `
+            <p class="font-body-md text-body-md text-on-surface-variant">
+              Are you sure you want to delete this task?
+              This action cannot be undone.
+            </p>`,
+
+          confirmLabel: 'Delete',
+
+          confirmClass: '!bg-error',
+
+          onConfirm: async () => {
+
+            await deleteTask(taskId);
+
+            closeModal();
+
+            await populateBoard();
+
+            bindCardActions();
+          },
+        });
+      });
+    });
 }
 
-/** Mount function called by board.js when switching to kanban view */
+/**
+ * Función principal ejecutada por board.js
+ * cuando se cambia a la vista Kanban
+ */
 export async function mountKanbanView() {
+
+  // Carga tablero
   await populateBoard();
 
-  // "New Task" button (header, admin only)
-  const btnCreate = document.getElementById('btn-create-task');
+  // Botón crear tarea (header)
+  const btnCreate =
+    document.getElementById('btn-create-task');
+
   if (btnCreate) {
+
     btnCreate.addEventListener('click', async () => {
+
       const users = await getUsers();
+
       openTaskModal(null, users, 'todo');
     });
   }
 
-  // "+" button on the Todo column header (admin only)
-  document.querySelectorAll('.btn-add-task').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const users = await getUsers();
-      openTaskModal(null, users, 'todo');
+  // Botones "+" en la columna Todo
+  document.querySelectorAll('.btn-add-task')
+    .forEach(btn => {
+
+      btn.addEventListener('click', async () => {
+
+        const users = await getUsers();
+
+        openTaskModal(null, users, 'todo');
+      });
     });
-  });
 }
